@@ -1,0 +1,11 @@
+{
+    "esversion": 6,
+    "libs": [
+        "browser"
+    ],
+    "plugins": {
+        "node": {},
+        "modules": {},
+        "node_resolve": {}
+    }
+}
