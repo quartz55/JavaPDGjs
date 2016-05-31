@@ -1,45 +1,33 @@
-Expression
-    = head:Term tail:(_ ("+" / "-") _ Term)* {
-        var result = head.result, i;
+additive
+    = left:multiplicative op:OPADD right:additive { return {left:left, op:op, right:right}; }
+    / multiplicative
 
-        for (i = 0; i < tail.length; i++) {
-            if (tail[i][1] === "+") { result += tail[i][3].result; }
-            if (tail[i][2] === "-") { result -= tail[i][3].result; }
-        }
+multiplicative
+    = left:primary op:OPMULTI right:multiplicative { return {left:left, op:op, right:right}; }
+    / primary
 
-        return {
-            node: "Expression",
-            left: head,
-            right: tail,
-            text: text(),
-            result: result
-        };
-    }
+primary
+    = integer
+    / OPENPAREN additive:additive CLOSEPAREN { return additive; }
 
-Term
-    = head:Factor tail:(_ ("*" / "/") _ Factor)* {
-        var result = head.result, i;
+integer "integer"
+    = _ digits:[0-9]+ _ { return parseInt(digits.join(''), 10); }
 
-        for (i = 0; i < tail.length; i++) {
-            if (tail[i][1] === "*") { result *= tail[i][3].result; }
-            if (tail[i][1] === "/") { result /= tail[i][3].result; }
-        }
+/**
+ * Define tokens
+ */
 
-        return {
-            node: "Term",
-            left: head,
-            right: tail,
-            text: text(),
-            result: result
-        };
-    }
+OPENPAREN = _ '(' _
+CLOSEPAREN = _ ')' _
 
-Factor
-    = "(" _ expr:Expression _ ")" { return expr; }
-    / Integer
+OPADD
+    = _ c:"+" _ {return c;}
+    / _ c:"-" _ {return c;}
 
-Integer "integer"
-    = [0-9]+ { return {node: "Integer", text: text(), result: parseInt(text(), 10) }}
+OPMULTI
+    = _ c:"*" _ {return c;}
+    / _ c:"/" _ {return c;}
 
-_ "whitespace"
-    = [ \t\n\r]*
+_
+    = [ \r\n\t]*
+ 

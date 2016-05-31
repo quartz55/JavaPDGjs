@@ -196,11 +196,12 @@
 CompilationUnit
     = Spacing pack:PackageDeclaration? imports:ImportDeclaration* types:TypeDeclaration* EOT
     {
+      return skipNulls(types);
       return {
         node:   'CompilationUnit',
         types:   skipNulls(types),
-        package: pack,
-        imports: skipNulls(imports)
+        // package: pack,
+        // imports: skipNulls(imports)
       };
     }
 
@@ -250,12 +251,12 @@ ClassDeclaration
     = CLASS id:Identifier gen:TypeParameters? ext:(EXTENDS ClassType)? impl:(IMPLEMENTS ClassTypeList)? body:ClassBody
     {
       return {
-        node:               'TypeDeclaration',
+        node:               'ClassDeclaration',
         name:                id,
-        superInterfaceTypes: extractOptionalList(impl, 1),
-        superclassType:      extractOptional(ext, 1),
+        // superInterfaceTypes: extractOptionalList(impl, 1),
+        // superclassType:      extractOptional(ext, 1),
         bodyDeclarations:    body,
-        typeParameters:      optionalList(gen),
+        // typeParameters:      optionalList(gen),
         interface:           false
       };
     }
@@ -282,20 +283,20 @@ MemberDecl
     = params:TypeParameters
       rest:GenericMethodOrConstructorRest              // Generic Method or Constructor
     {
-      return mergeProps(rest, {
+      return mergeProps({
         node:          'MethodDeclaration',
         typeParameters: params
-      });
+      }, rest);
     }
     / type:Type id:Identifier
       rest:MethodDeclaratorRest                        // Method
     {
-      return mergeProps(rest, {
+      return mergeProps({
         node:          'MethodDeclaration',
-        returnType2:    type,
+        // returnType2:    type,
         name:           id,
-        typeParameters: []
-      });
+        // typeParameters: []
+      }, rest);
     }
     / type:Type decls:VariableDeclarators SEMI         // Field
     {
@@ -307,12 +308,12 @@ MemberDecl
     }
     / VOID id:Identifier rest:VoidMethodDeclaratorRest // Void method
     {
-      return mergeProps(rest, {
+      return mergeProps({
         node:       'MethodDeclaration',
-        returnType2: makePrimitive('void'),
+        // returnType2: makePrimitive('void'),
         name:        id,
         constructor: false
-      });
+      }, rest);
     }
     / id:Identifier rest:ConstructorDeclaratorRest     // Constructor
     {
@@ -345,9 +346,9 @@ MethodDeclaratorRest
       body:(MethodBody / SEMI { return null; })
     {
       return {
-        parameters:       params,
-        thrownExceptions: extractThrowsClassType(extractOptionalList(throws, 1)),
-        extraDimensions:  dims.length,
+        // parameters:       params,
+        // thrownExceptions: extractThrowsClassType(extractOptionalList(throws, 1)),
+        // extraDimensions:  dims.length,
         body:             body,
         constructor:      false
       };
@@ -360,10 +361,10 @@ VoidMethodDeclaratorRest
     {
       return {
         parameters:       params,
-        thrownExceptions: extractThrowsClassType(extractOptionalList(throws, 1)),
+        // thrownExceptions: extractThrowsClassType(extractOptionalList(throws, 1)),
         body:             body,
-        extraDimensions:  0,
-        typeParameters:   []
+        // extraDimensions:  0,
+        // typeParameters:   []
       };
     }
 
@@ -551,8 +552,22 @@ LocalVariableDeclarationStatement
     = modifiers:(FINAL { return makeModifier('final'); } / Annotation)*
       type:Type decls:VariableDeclarators SEMI
     {
+      function a(frags){
+        return frags.map(function (f) {
+          if (f.node) return f.name.identifier;
+        });
+      }
+      function b(frags) {
+        return frags.map(function (f) {
+          if (f.node && f.initializer && f.initializer.node === 'SimpleName')
+            return f.initializer.identifier;
+        });
+      }
       return {
         node:        'VariableDeclarationStatement',
+        text:         text(),
+        defs:         a(decls),
+        uses:         b(decls),
         fragments:    decls,
         modifiers:    modifiers,
         type:         type
@@ -561,610 +576,613 @@ LocalVariableDeclarationStatement
 
 VariableDeclarators
     = first:VariableDeclarator rest:(COMMA VariableDeclarator)*
-    { return buildList(first, rest, 1); }
+  { return buildList(first, rest, 1); }
 
 VariableDeclarator
-    = name:Identifier dims:Dim* init:(EQU VariableInitializer)?
-    {
-      return {
-        node:           'VariableDeclarationFragment',
-        name:            name,
-        extraDimensions: dims.length,
-        initializer:     extractOptional(init, 1)
-      };
-    }
+  = name:Identifier dims:Dim* init:(EQU VariableInitializer)?
+  {
+    return {
+			node:						'VariableDeclarationFragment',
+			name:						 name,
+			extraDimensions: dims.length,
+			initializer:		 extractOptional(init, 1)
+		};
+  }
 
 //-------------------------------------------------------------------------
 //  Formal Parameters
 //-------------------------------------------------------------------------
 
 FormalParameters
-    = LPAR params:FormalParameterList? RPAR
-    { return optionalList(params); }
+  = LPAR params:FormalParameterList? RPAR
+{ return optionalList(params); }
 
 FormalParameter
-    = modifiers:(FINAL { return makeModifier('final'); } / Annotation)*
-      type:Type decl:VariableDeclaratorId
-    {
-      return mergeProps(decl, {
-        type:        type,
-        modifiers:   modifiers,
-        varargs:     false,
-        initializer: null
-      });
-    }
+  = modifiers:(FINAL { return makeModifier('final'); } / Annotation)*
+  type:Type decl:VariableDeclaratorId
+{
+  return mergeProps(decl, {
+    type:        type,
+    modifiers:   modifiers,
+    varargs:     false,
+    initializer: null
+  });
+}
 
 LastFormalParameter
-    = modifiers:(FINAL { return makeModifier('final'); } / Annotation)*
-      type:Type ELLIPSIS decl:VariableDeclaratorId
-    {
-      return mergeProps(decl, {
-        type:        type,
-        modifiers:   modifiers,
-        varargs:     true,
-        initializer: null
-      });
-    }
+  = modifiers:(FINAL { return makeModifier('final'); } / Annotation)*
+  type:Type ELLIPSIS decl:VariableDeclaratorId
+{
+  return mergeProps(decl, {
+    type:        type,
+    modifiers:   modifiers,
+    varargs:     true,
+    initializer: null
+  });
+}
 
 FormalParameterList
-    = first:FormalParameter rest:(COMMA FormalParameter)* last:(COMMA LastFormalParameter)?
-    { return buildList(first, rest, 1).concat(extractOptionalList(last, 1)); }
-    / last:LastFormalParameter
-    { return [last]; }
+  = first:FormalParameter rest:(COMMA FormalParameter)* last:(COMMA LastFormalParameter)?
+  { return buildList(first, rest, 1).concat(extractOptionalList(last, 1)); }
+  / last:LastFormalParameter
+{ return [last]; }
 
 VariableDeclaratorId
-    = id:Identifier dims:Dim*
-    {
-      return {
-        node:           'SingleVariableDeclaration',
-        name:            id,
-        extraDimensions: dims.length
-      };
-    }
+  = id:Identifier dims:Dim*
+  {
+    return {
+      node:           'SingleVariableDeclaration',
+      name:            id,
+      extraDimensions: dims.length
+    };
+  }
 
 //-------------------------------------------------------------------------
 //  Statements
 //-------------------------------------------------------------------------
 
 Block
-    = LWING statements:BlockStatements RWING
-    {
-      return {
-        node:      'Block',
-        statements: statements
-      }
-    }
+  = LWING statements:BlockStatements RWING
+{
+  return {
+    node:      'Block',
+    statements: statements
+  }
+}
 
 BlockStatements
-    = BlockStatement*
+  = BlockStatement*
 
 BlockStatement
-    = LocalVariableDeclarationStatement
-    / modifiers:Modifier* decl:( ClassDeclaration / EnumDeclaration )
-    {
-      return {
-        node:       'TypeDeclarationStatement',
-        declaration: mergeProps(decl,  { modifiers: modifiers })
-      };
-    }
-    / Statement
+  = LocalVariableDeclarationStatement
+  / modifiers:Modifier* decl:( ClassDeclaration / EnumDeclaration )
+{
+  return {
+    node:       'TypeDeclarationStatement',
+    declaration: mergeProps(decl,  { modifiers: modifiers })
+  };
+}
+  / Statement
 
 Statement
-    = Block
-    / ASSERT expr:Expression message:(COLON Expression)? SEMI
-    {
-      return {
-        node:      'AssertStatement',
-        expression: expr,
-        message:    extractOptional(message, 1)
-      };
-    }
-    / IF expr:ParExpression then:Statement alt:(ELSE Statement)?
-    {
-      return {
-        node:         'IfStatement',
-        elseStatement: extractOptional(alt, 1),
-        thenStatement: then,
-        expression:    expr.expression,
-      };
-    }
-    / FOR LPAR init:ForInit? SEMI expr:Expression? SEMI up:ForUpdate? RPAR body:Statement
-    {
-      return {
-        node:        'ForStatement',
-        initializers: optionalList(init),
-        expression:   expr,
-        updaters:     optionalList(up),
-        body:         body
-      };
-    }
-    / FOR LPAR param:FormalParameter COLON expr:Expression RPAR statement:Statement
-    {
-      return {
-        node:      'EnhancedForStatement',
-        parameter:  param,
-        expression: expr,
-        body:       statement
-      };
-    }
-    / WHILE expr:ParExpression body:Statement
-    {
-      return {
-        node:      'WhileStatement',
-        expression: expr.expression,
-        body:       body
-      };
-    }
-    / DO statement:Statement WHILE expr:ParExpression SEMI
-    {
-      return {
-        node:      'DoStatement',
-        expression: expr.expression,
-        body:       statement
-      };
-    }
-    / TRY LPAR first:Resource rest:(SEMI Resource)* SEMI? RPAR
-      body:Block cat:Catch* fin:Finally?
-    {
-      return mergeProps(makeCatchFinally(cat, fin), {
-        node:        'TryStatement',
-        body:         body,
-        resources:    buildList(first, rest, 1)
-      });
-    }
-    / TRY body:Block
-      rest:(cat:Catch+ fin:Finally? { return makeCatchFinally(cat, fin); }
-            / fin:Finally { return makeCatchFinally([], fin); })
-    {
-      return mergeProps(rest, {
-        node:        'TryStatement',
-        body:         body,
-        resources:    []
-      });
-    }
-    / SWITCH expr:ParExpression LWING cases:SwitchBlockStatementGroups RWING
-    { return { node: 'SwitchStatement', statements: cases, expression: expr.expression }; }
-    / SYNCHRONIZED expr:ParExpression body:Block
-    { return { node: 'SynchronizedStatement', expression: expr.expression, body: body } }
-    / RETURN expr:Expression? SEMI
-    { return { node: 'ReturnStatement', expression: expr } }
-    / THROW expr:Expression SEMI
-    { return { node: 'ThrowStatement', expression: expr }; }
-    / BREAK id:Identifier? SEMI
-    { return { node: 'BreakStatement', label: id }; }
-    / CONTINUE id:Identifier? SEMI
-    { return { node: 'ContinueStatement', label: id }; }
-    / SEMI
-    { return { node: 'EmptyStatement' }; }
-    / statement:StatementExpression SEMI
-    { return statement; }
-    / id:Identifier COLON statement:Statement
-    { return { node: 'LabeledStatement', label: id, body: statement }; }
+  = Block
+  / ASSERT expr:Expression message:(COLON Expression)? SEMI
+{
+  return {
+    node:      'AssertStatement',
+    expression: expr,
+    message:    extractOptional(message, 1)
+  };
+}
+  / IF expr:ParExpression then:Statement alt:(ELSE Statement)?
+  {
+    return {
+      node:         'IfStatement',
+      elseStatement: extractOptional(alt, 1),
+      thenStatement: then,
+      expression:    expr.expression,
+    };
+  }
+  / FOR LPAR init:ForInit? SEMI expr:Expression? SEMI up:ForUpdate? RPAR body:Statement
+{
+  return {
+    node:        'ForStatement',
+    initializers: optionalList(init),
+    expression:   expr,
+    updaters:     optionalList(up),
+    body:         body
+  };
+}
+  / FOR LPAR param:FormalParameter COLON expr:Expression RPAR statement:Statement
+{
+  return {
+    node:      'EnhancedForStatement',
+    parameter:  param,
+    expression: expr,
+    body:       statement
+  };
+}
+  / WHILE expr:ParExpression body:Statement
+{
+  return {
+    node:      'WhileStatement',
+    text:       text(),
+    uses:       expr.uses,
+    defs:       expr.defs,
+    expression: expr.expression,
+    body:       body
+  };
+}
+  / DO statement:Statement WHILE expr:ParExpression SEMI
+{
+  return {
+    node:      'DoStatement',
+    expression: expr.expression,
+    body:       statement
+  };
+}
+  / TRY LPAR first:Resource rest:(SEMI Resource)* SEMI? RPAR
+body:Block cat:Catch* fin:Finally?
+  {
+    return mergeProps(makeCatchFinally(cat, fin), {
+      node:        'TryStatement',
+      body:         body,
+      resources:    buildList(first, rest, 1)
+    });
+  }
+  / TRY body:Block
+rest:(cat:Catch+ fin:Finally? { return makeCatchFinally(cat, fin); }
+      / fin:Finally { return makeCatchFinally([], fin); })
+{
+  return mergeProps(rest, {
+    node:        'TryStatement',
+    body:         body,
+    resources:    []
+  });
+}
+  / SWITCH expr:ParExpression LWING cases:SwitchBlockStatementGroups RWING
+{ return { node: 'SwitchStatement', statements: cases, expression: expr.expression }; }
+  / SYNCHRONIZED expr:ParExpression body:Block
+{ return { node: 'SynchronizedStatement', expression: expr.expression, body: body } }
+  / RETURN expr:Expression? SEMI
+{ return { node: 'ReturnStatement', expression: expr } }
+  / THROW expr:Expression SEMI
+{ return { node: 'ThrowStatement', expression: expr }; }
+  / BREAK id:Identifier? SEMI
+{ return { node: 'BreakStatement', label: id }; }
+  / CONTINUE id:Identifier? SEMI
+{ return { node: 'ContinueStatement', label: id }; }
+  / SEMI
+{ return { node: 'EmptyStatement' }; }
+  / statement:StatementExpression SEMI
+{ return statement; }
+  / id:Identifier COLON statement:Statement
+{ return { node: 'LabeledStatement', label: id, body: statement }; }
 
 Resource
-    = modifiers:(FINAL { return makeModifier('final'); } / Annotation)* type:Type decl:VariableDeclaratorId EQU expr:Expression
-    {
-      var fragment = mergeProps(decl, { initializer: expr });
-      fragment.node = 'VariableDeclarationFragment';
-      return {
-        node:     'VariableDeclarationExpression',
-        modifiers: modifiers,
-        type:      type,
-        fragments: [fragment]
-      };
-    }
+  = modifiers:(FINAL { return makeModifier('final'); } / Annotation)* type:Type decl:VariableDeclaratorId EQU expr:Expression
+{
+  var fragment = mergeProps(decl, { initializer: expr });
+  fragment.node = 'VariableDeclarationFragment';
+  return {
+    node:     'VariableDeclarationExpression',
+    modifiers: modifiers,
+    type:      type,
+    fragments: [fragment]
+  };
+}
 
 Catch
-    = CATCH LPAR modifiers:(FINAL { return makeModifier('final'); } / Annotation)*
-      first:Type rest:(OR Type)* decl:VariableDeclaratorId RPAR body:Block
-    {
-      return {
-        node:       'CatchClause',
-        body:        body,
-        exception:   mergeProps(decl, {
-          modifiers:   modifiers,
-          initializer: null,
-          varargs:     false,
-          type:        rest.length ? {
-            node: 'UnionType',
-            types: buildList(first, rest, 1)
-            } : first
-        })
-      };
-    }
+  = CATCH LPAR modifiers:(FINAL { return makeModifier('final'); } / Annotation)*
+  first:Type rest:(OR Type)* decl:VariableDeclaratorId RPAR body:Block
+{
+  return {
+    node:       'CatchClause',
+    body:        body,
+    exception:   mergeProps(decl, {
+      modifiers:   modifiers,
+      initializer: null,
+      varargs:     false,
+      type:        rest.length ? {
+        node: 'UnionType',
+        types: buildList(first, rest, 1)
+      } : first
+    })
+  };
+}
 
 Finally
-    = FINALLY block:Block
-    { return block; }
+  = FINALLY block:Block
+{ return block; }
 
 SwitchBlockStatementGroups
-    = blocks:SwitchBlockStatementGroup*
-    { return [].concat.apply([], blocks); }
+  = blocks:SwitchBlockStatementGroup*
+  { return [].concat.apply([], blocks); }
 
 SwitchBlockStatementGroup
-    = expr:SwitchLabel blocks:BlockStatements
-    { return [{ node: 'SwitchCase', expression: expr }].concat(blocks); }
+  = expr:SwitchLabel blocks:BlockStatements
+{ return [{ node: 'SwitchCase', expression: expr }].concat(blocks); }
 
 SwitchLabel
-    = CASE expr:ConstantExpression COLON
-    { return expr; }
-    / CASE expr:EnumConstantName COLON
-    { return expr; }
-    / DEFAULT COLON
-    { return null; }
+  = CASE expr:ConstantExpression COLON
+{ return expr; }
+  / CASE expr:EnumConstantName COLON
+{ return expr; }
+  / DEFAULT COLON
+{ return null; }
 
 ForInit
-    = modifiers:(FINAL { return makeModifier('final'); } / Annotation)* type:Type decls:VariableDeclarators
-    {
-      return [{
-        node:     'VariableDeclarationExpression',
-        modifiers: modifiers,
-        fragments: decls,
-        type:      type
-      }];
-    }
-    / first:StatementExpression rest:(COMMA StatementExpression)*
-    { return extractExpressions(buildList(first, rest, 1)); }
+  = modifiers:(FINAL { return makeModifier('final'); } / Annotation)* type:Type decls:VariableDeclarators
+{
+  return [{
+    node:     'VariableDeclarationExpression',
+    modifiers: modifiers,
+    fragments: decls,
+    type:      type
+  }];
+}
+  / first:StatementExpression rest:(COMMA StatementExpression)*
+  { return extractExpressions(buildList(first, rest, 1)); }
 
 ForUpdate
-    = first:StatementExpression rest:(COMMA StatementExpression)*
-    { return extractExpressions(buildList(first, rest, 1)); }
+  = first:StatementExpression rest:(COMMA StatementExpression)*
+  { return extractExpressions(buildList(first, rest, 1)); }
 
 EnumConstantName
-    = Identifier
+  = Identifier
 
 //-------------------------------------------------------------------------
 //  Expressions
 //-------------------------------------------------------------------------
 
 StatementExpression
-    = expr:Expression
-    {
-      switch(expr.node) {
-        case 'SuperConstructorInvocation':
-        case 'ConstructorInvocation':
-          return expr;
-        default:
-          return {
-            node:      'ExpressionStatement',
-            expression: expr
-          };
-      }
-    }
+  = expr:Expression
+{
+  switch(expr.node) {
+  case 'SuperConstructorInvocation':
+  case 'ConstructorInvocation':
+    return expr;
+  default:
+    return {
+      node:      'ExpressionStatement',
+      expression: expr
+    };
+  }
+}
 
-    // This is more generous than definition in section 14.8, which allows only
-    // specific forms of Expression.
+// This is more generous than definition in section 14.8, which allows only
+// specific forms of Expression.
 
 
 ConstantExpression
-    = Expression
+  = Expression
 
 Expression
-    = left:ConditionalExpression op:AssignmentOperator right:Expression
-    {
-      return {
-        node:         'Assignment',
-        operator:      op[0] /* remove ending spaces */,
-        leftHandSide:  left,
-        rightHandSide: right
-      };
-    }
-    / ConditionalExpression
+  = left:ConditionalExpression op:AssignmentOperator right:Expression
+{
+  return {
+    node:         'Assignment',
+    operator:      op[0] /* remove ending spaces */,
+    leftHandSide:  left,
+    rightHandSide: right
+  };
+}
+  / ConditionalExpression
 
-    // This definition is part of the modification in JLS Chapter 18
-    // to minimize look ahead. In JLS Chapter 15.27, Expression is defined
-    // as AssignmentExpression, which is effectively defined as
-    // (LeftHandSide AssignmentOperator)* ConditionalExpression.
-    // The above is obtained by allowing ANY ConditionalExpression
-    // as LeftHandSide, which results in accepting statements like 5 = a.
+// This definition is part of the modification in JLS Chapter 18
+// to minimize look ahead. In JLS Chapter 15.27, Expression is defined
+// as AssignmentExpression, which is effectively defined as
+// (LeftHandSide AssignmentOperator)* ConditionalExpression.
+// The above is obtained by allowing ANY ConditionalExpression
+// as LeftHandSide, which results in accepting statements like 5 = a.
 
 AssignmentOperator
-    = EQU
-    / PLUSEQU
-    / MINUSEQU
-    / STAREQU
-    / DIVEQU
-    / ANDEQU
-    / OREQU
-    / HATEQU
-    / MODEQU
-    / SLEQU
-    / SREQU
-    / BSREQU
+  = EQU
+  / PLUSEQU
+  / MINUSEQU
+  / STAREQU
+  / DIVEQU
+  / ANDEQU
+  / OREQU
+  / HATEQU
+  / MODEQU
+  / SLEQU
+  / SREQU
+  / BSREQU
 
 ConditionalExpression
-    = expr:ConditionalOrExpression QUERY then:Expression COLON alt:ConditionalExpression
-    {
-      return {
-        node:          'ConditionalExpression',
-        expression:     expr,
-        thenExpression: then,
-        elseExpression: alt
-      };
-    }
-    / ConditionalOrExpression
+  = expr:ConditionalOrExpression QUERY then:Expression COLON alt:ConditionalExpression
+{
+  return {
+    node:          'ConditionalExpression',
+    expression:     expr,
+    thenExpression: then,
+    elseExpression: alt
+  };
+}
+  / ConditionalOrExpression
 
 ConditionalOrExpression
-    = first:ConditionalAndExpression rest:(OROR ConditionalAndExpression)*
-    { return buildInfixExpr(first, rest); }
+  = first:ConditionalAndExpression rest:(OROR ConditionalAndExpression)*
+  { return buildInfixExpr(first, rest); }
 
 ConditionalAndExpression
-    = first:InclusiveOrExpression rest:(ANDAND InclusiveOrExpression)*
-    { return buildInfixExpr(first, rest); }
+  = first:InclusiveOrExpression rest:(ANDAND InclusiveOrExpression)*
+  { return buildInfixExpr(first, rest); }
 
 InclusiveOrExpression
-    = first:ExclusiveOrExpression rest:(OR ExclusiveOrExpression)*
-    { return buildInfixExpr(first, rest); }
+  = first:ExclusiveOrExpression rest:(OR ExclusiveOrExpression)*
+  { return buildInfixExpr(first, rest); }
 
 ExclusiveOrExpression
-    = first:AndExpression rest:(HAT AndExpression)*
-    { return buildInfixExpr(first, rest); }
+  = first:AndExpression rest:(HAT AndExpression)*
+  { return buildInfixExpr(first, rest); }
 
 AndExpression
-    = first:EqualityExpression rest:(AND EqualityExpression)*
-    { return buildInfixExpr(first, rest); }
+  = first:EqualityExpression rest:(AND EqualityExpression)*
+  { return buildInfixExpr(first, rest); }
 
 EqualityExpression
-    = first:RelationalExpression rest:((EQUAL /  NOTEQUAL) RelationalExpression)*
-    { return buildInfixExpr(first, rest); }
+  = first:RelationalExpression rest:((EQUAL /  NOTEQUAL) RelationalExpression)*
+  { return buildInfixExpr(first, rest); }
 
 RelationalExpression
-    = first:ShiftExpression rest:((LE / GE / LT / GT) ShiftExpression / INSTANCEOF ReferenceType )*
-    {
-      return buildTree(first, rest, function(result, element) {
-        return element[0][0] === 'instanceof' ? {
-          node:        'InstanceofExpression',
-          leftOperand:  result,
-          rightOperand: element[1]
-        } : {
-          node:        'InfixExpression',
-          operator:     element[0][0], // remove ending Spacing
-          leftOperand:  result,
-          rightOperand: element[1]
-        };
-      });
-    }
+  = first:ShiftExpression rest:((LE / GE / LT / GT) ShiftExpression / INSTANCEOF ReferenceType )*
+  {
+    return buildTree(first, rest, function(result, element) {
+      return element[0][0] === 'instanceof' ? {
+        node:        'InstanceofExpression',
+        leftOperand:  result,
+        rightOperand: element[1]
+      } : {
+        node:        'InfixExpression',
+        operator:     element[0][0], // remove ending Spacing
+        leftOperand:  result,
+        rightOperand: element[1]
+      };
+    });
+  }
 
 ShiftExpression
-    = first:AdditiveExpression rest:((SL / SR / BSR) AdditiveExpression)*
-    { return buildInfixExpr(first, rest); }
+  = first:AdditiveExpression rest:((SL / SR / BSR) AdditiveExpression)*
+  { return buildInfixExpr(first, rest); }
 
 AdditiveExpression
-    = first:MultiplicativeExpression rest:((PLUS / MINUS) MultiplicativeExpression)*
-    { return buildInfixExpr(first, rest); }
+  = first:MultiplicativeExpression rest:((PLUS / MINUS) MultiplicativeExpression)*
+  { return buildInfixExpr(first, rest); }
 
 MultiplicativeExpression
-    = first:UnaryExpression rest:((STAR / DIV / MOD) UnaryExpression)*
-    { return buildInfixExpr(first, rest); }
+  = first:UnaryExpression rest:((STAR / DIV / MOD) UnaryExpression)*
+  { return buildInfixExpr(first, rest); }
 
 UnaryExpression
-    = operator:PrefixOp operand:UnaryExpression
-    {
-      return operand.node === 'NumberLiteral' && operator === '-' &&
-        (operand.token === '9223372036854775808L' ||
-         operand.token === '9223372036854775808l' ||
-         operand.token === '2147483648')
-        ? { node: 'NumberLiteral', token: text() }
-        : {
-          node:    'PrefixExpression',
-          operator: operator,
-          operand:  operand
-        };
-    }
-    / UnaryExpressionNotPlusMinus
+  = operator:PrefixOp operand:UnaryExpression
+{
+  return operand.node === 'NumberLiteral' && operator === '-' &&
+    (operand.token === '9223372036854775808L' ||
+     operand.token === '9223372036854775808l' ||
+     operand.token === '2147483648')
+    ? { node: 'NumberLiteral', token: text() }
+  : {
+    node:    'PrefixExpression',
+    operator: operator,
+    operand:  operand
+  };
+}
+  / UnaryExpressionNotPlusMinus
 
 UnaryExpressionNotPlusMinus
-    = expr:CastExpression
-    {
-      return {
-        node:      'CastExpression',
-        type:       expr[1],
-        expression: expr[3]
-      };
-    }
-    / arg:Primary sel:Selector sels:Selector* operator:PostfixOp+
-    {
-      return operator.length > 1 ? TODO(/* JLS7? */) : {
-        node:    'PostfixExpression',
-        operator: operator[0],
-        operand:  buildSelectorTree(arg, sel, sels)
-      };
-    }
-    / arg:Primary sel:Selector sels:Selector*
-    { return buildSelectorTree(arg, sel, sels); }
-    / arg:Primary operator:PostfixOp+
-    {
-      return operator.length > 1 ? TODO(/* JLS7? */) : {
-        node:    'PostfixExpression',
-        operator: operator[0],
-        operand:  arg
-      };
-    }
-    / Primary
+  = expr:CastExpression
+{
+  return {
+    node:      'CastExpression',
+    type:       expr[1],
+    expression: expr[3]
+  };
+}
+  / arg:Primary sel:Selector sels:Selector* operator:PostfixOp+
+  {
+    return operator.length > 1 ? TODO(/* JLS7? */) : {
+      node:    'PostfixExpression',
+      operator: operator[0],
+      operand:  buildSelectorTree(arg, sel, sels)
+    };
+  }
+  / arg:Primary sel:Selector sels:Selector*
+  { return buildSelectorTree(arg, sel, sels); }
+  / arg:Primary operator:PostfixOp+
+  {
+    return operator.length > 1 ? TODO(/* JLS7? */) : {
+      node:    'PostfixExpression',
+      operator: operator[0],
+      operand:  arg
+    };
+  }
+  / Primary
 
 CastExpression
-    = LPAR PrimitiveType RPAR UnaryExpression
-    / LPAR ReferenceType RPAR UnaryExpressionNotPlusMinus
+  = LPAR PrimitiveType RPAR UnaryExpression
+  / LPAR ReferenceType RPAR UnaryExpressionNotPlusMinus
 
 Primary
-    = ParExpression
-    / args:NonWildcardTypeArguments
-      ret:(ExplicitGenericInvocationSuffix / THIS args:Arguments
-      { return { node: 'ConstructorInvocation', arguments: args, typeArguments: [] }; })
-    {
-      if (ret.typeArguments.length) return TODO(/* Ugly ! */);
-      ret.typeArguments = args;
-      return ret;
-    }
-    / THIS args:Arguments?
-    {
-      return args === null ? {
-        node:     'ThisExpression',
-        qualifier: null
-      } : {
-        node:         'ConstructorInvocation',
-        arguments:     args,
-        typeArguments: []
-      };
-    }
-    / SUPER suffix:SuperSuffix
-    {
-      return suffix.node === 'SuperConstructorInvocation'
-        ? suffix
-        : mergeProps(suffix, { qualifier: null });
-    }
-    / Literal
-    / NEW creator:Creator
-    { return creator; }
-    / QualifiedIdentifierSuffix
-    / QualifiedIdentifier
-    / type:BasicType dims:Dim* DOT CLASS
-    {
-      return {
-        node: 'TypeLiteral',
-        type:  buildArrayTree(type, dims)
-      };
-    }
-    / VOID DOT CLASS
-    {
-      return {
-        node: 'TypeLiteral',
-        type:  makePrimitive('void')
-      };
-    }
+  = ParExpression
+  / args:NonWildcardTypeArguments
+ret:(ExplicitGenericInvocationSuffix / THIS args:Arguments
+     { return { node: 'ConstructorInvocation', arguments: args, typeArguments: [] }; })
+{
+  if (ret.typeArguments.length) return TODO(/* Ugly ! */);
+  ret.typeArguments = args;
+  return ret;
+}
+  / THIS args:Arguments?
+  {
+    return args === null ? {
+      node:     'ThisExpression',
+      qualifier: null
+    } : {
+      node:         'ConstructorInvocation',
+      arguments:     args,
+      typeArguments: []
+    };
+  }
+  / SUPER suffix:SuperSuffix
+{
+  return suffix.node === 'SuperConstructorInvocation'
+    ? suffix
+    : mergeProps(suffix, { qualifier: null });
+}
+  / Literal
+  / NEW creator:Creator
+{ return creator; }
+  / QualifiedIdentifierSuffix
+  / QualifiedIdentifier
+  / type:BasicType dims:Dim* DOT CLASS
+{
+  return {
+    node: 'TypeLiteral',
+    type:  buildArrayTree(type, dims)
+  };
+}
+  / VOID DOT CLASS
+{
+  return {
+    node: 'TypeLiteral',
+    type:  makePrimitive('void')
+  };
+}
 
 QualifiedIdentifierSuffix
-    = qual:QualifiedIdentifier dims:Dim+ DOT CLASS
-    {
-      return {
-        node: 'TypeLiteral',
-        type:  buildArrayTree(buildTypeName(qual, null, []), dims)
-      };
-    }
-    / qual:QualifiedIdentifier LBRK expr:Expression RBRK
-    { return { node: 'ArrayAccess', array: qual, index: expr }; }
-    / qual:QualifiedIdentifier args:Arguments
-    {
-      return mergeProps(popQualified(qual), {
-        node:         'MethodInvocation',
-        arguments:     args,
-        typeArguments: []
-      });
-    }
-    / qual:QualifiedIdentifier DOT CLASS
-    { return { node: 'TypeLiteral', type: buildTypeName(qual, null, []) }; }
-    / qual:QualifiedIdentifier DOT ret:ExplicitGenericInvocation
-    {
-      if (ret.expression) return TODO(/* Ugly ! */);
-      ret.expression = qual;
-      return ret;
-    }
-    / qual:QualifiedIdentifier DOT THIS
-    { return { node: 'ThisExpression', qualifier: qual }; }
-    / qual:QualifiedIdentifier DOT SUPER args:Arguments
-    {
-      return {
-        node:         'SuperConstructorInvocation',
-        arguments:     args,
-        expression:    qual,
-        typeArguments: []
-      };
-    }
-    / qual:QualifiedIdentifier DOT NEW args:NonWildcardTypeArguments? rest:InnerCreator
-    { return mergeProps(rest, { expression: qual, typeArguments: optionalList(args) }); }
+  = qual:QualifiedIdentifier dims:Dim+ DOT CLASS
+{
+  return {
+    node: 'TypeLiteral',
+    type:  buildArrayTree(buildTypeName(qual, null, []), dims)
+  };
+}
+  / qual:QualifiedIdentifier LBRK expr:Expression RBRK
+{ return { node: 'ArrayAccess', array: qual, index: expr }; }
+  / qual:QualifiedIdentifier args:Arguments
+{
+  return mergeProps(popQualified(qual), {
+    node:         'MethodInvocation',
+    arguments:     args,
+    typeArguments: []
+  });
+}
+  / qual:QualifiedIdentifier DOT CLASS
+{ return { node: 'TypeLiteral', type: buildTypeName(qual, null, []) }; }
+  / qual:QualifiedIdentifier DOT ret:ExplicitGenericInvocation
+{
+  if (ret.expression) return TODO(/* Ugly ! */);
+  ret.expression = qual;
+  return ret;
+}
+  / qual:QualifiedIdentifier DOT THIS
+{ return { node: 'ThisExpression', qualifier: qual }; }
+  / qual:QualifiedIdentifier DOT SUPER args:Arguments
+{
+  return {
+    node:         'SuperConstructorInvocation',
+    arguments:     args,
+    expression:    qual,
+    typeArguments: []
+  };
+}
+  / qual:QualifiedIdentifier DOT NEW args:NonWildcardTypeArguments? rest:InnerCreator
+{ return mergeProps(rest, { expression: qual, typeArguments: optionalList(args) }); }
 
-    // This definition comes from Chapter 18 in JLS Third edition.
-    // The definition in JLS SE7 seems incorrect as it would mean
-    // nesting of brackets.
+// This definition comes from Chapter 18 in JLS Third edition.
+// The definition in JLS SE7 seems incorrect as it would mean
+// nesting of brackets.
 
 ExplicitGenericInvocation
-    = args:NonWildcardTypeArguments ret:ExplicitGenericInvocationSuffix
-    {
-      if (ret.typeArguments.length) return TODO(/* Ugly ! */);
-      ret.typeArguments = args;
-      return ret;
-    }
+  = args:NonWildcardTypeArguments ret:ExplicitGenericInvocationSuffix
+{
+  if (ret.typeArguments.length) return TODO(/* Ugly ! */);
+  ret.typeArguments = args;
+  return ret;
+}
 
 NonWildcardTypeArguments
-    = LPOINT first:ReferenceType rest:(COMMA ReferenceType)* RPOINT
-    { return buildList(first, rest, 1); }
+  = LPOINT first:ReferenceType rest:(COMMA ReferenceType)* RPOINT
+{ return buildList(first, rest, 1); }
 
 TypeArgumentsOrDiamond
-    = LPOINT RPOINT
-    { return []; }
-    / TypeArguments
+  = LPOINT RPOINT
+{ return []; }
+  / TypeArguments
 
 NonWildcardTypeArgumentsOrDiamond
-    = LPOINT RPOINT
-    / NonWildcardTypeArguments
+  = LPOINT RPOINT
+  / NonWildcardTypeArguments
 
 ExplicitGenericInvocationSuffix
-    = SUPER suffix:SuperSuffix
-    { return suffix; }
-    / id:Identifier args:Arguments
-    { return { node: 'MethodInvocation', arguments: args, name: id, typeArguments: [] }; }
+  = SUPER suffix:SuperSuffix
+{ return suffix; }
+  / id:Identifier args:Arguments
+{ return { node: 'MethodInvocation', arguments: args, name: id, typeArguments: [] }; }
 
 PrefixOp
-    = op:(
-      INC
-    / DEC
-    / BANG
-    / TILDA
-    / PLUS
-    / MINUS
-    ) { return op[0]; /* remove ending spaces */ }
+  = op:(
+    INC
+      / DEC
+      / BANG
+      / TILDA
+      / PLUS
+      / MINUS
+  ) { return op[0]; /* remove ending spaces */ }
 
 PostfixOp
-    = op:(
-      INC
-    / DEC
-    ) { return op[0]; /* remove ending spaces */ }
+  = op:(
+    INC
+      / DEC
+  ) { return op[0]; /* remove ending spaces */ }
 
 Selector
-    = DOT id:Identifier args:Arguments
-    { return { node: 'MethodInvocation', arguments: args, name: id, typeArguments: [] }; }
-    / DOT id:Identifier
-    { return { node: 'FieldAccess', name: id }; }
-    / DOT ret:ExplicitGenericInvocation
-    { return ret; }
-    / DOT THIS
-    { return TODO(/* Any sample ? */); }
-    / DOT SUPER suffix:SuperSuffix
-    { return suffix; }
-    / DOT NEW args:NonWildcardTypeArguments? ret:InnerCreator
-    { return mergeProps(ret, { typeArguments: optionalList(args) }); }
-    / expr:DimExpr
-    { return { node: 'ArrayAccess', index: expr }; }
+  = DOT id:Identifier args:Arguments
+{ return { node: 'MethodInvocation', arguments: args, name: id, typeArguments: [] }; }
+  / DOT id:Identifier
+{ return { node: 'FieldAccess', name: id }; }
+  / DOT ret:ExplicitGenericInvocation
+{ return ret; }
+  / DOT THIS
+{ return TODO(/* Any sample ? */); }
+  / DOT SUPER suffix:SuperSuffix
+{ return suffix; }
+  / DOT NEW args:NonWildcardTypeArguments? ret:InnerCreator
+{ return mergeProps(ret, { typeArguments: optionalList(args) }); }
+  / expr:DimExpr
+{ return { node: 'ArrayAccess', index: expr }; }
 
 SuperSuffix
-    = args:Arguments
-    {
-      return {
-        node:         'SuperConstructorInvocation',
-        arguments:     args,
-        expression:    null,
-        typeArguments: []
-      };
-    }
-    / DOT gen:NonWildcardTypeArguments? id:Identifier args:Arguments?
-    {
-      return args === null ? {
-        node: 'SuperFieldAccess',
-        name:  id
-      } : {
-        node:         'SuperMethodInvocation',
-        typeArguments: optionalList(gen),
-        name:          id,
-        arguments:     args
-      };
-    }
+  = args:Arguments
+{
+  return {
+    node:         'SuperConstructorInvocation',
+    arguments:     args,
+    expression:    null,
+    typeArguments: []
+  };
+}
+  / DOT gen:NonWildcardTypeArguments? id:Identifier args:Arguments?
+  {
+    return args === null ? {
+      node: 'SuperFieldAccess',
+      name:  id
+    } : {
+      node:         'SuperMethodInvocation',
+      typeArguments: optionalList(gen),
+      name:          id,
+      arguments:     args
+    };
+  }
 
-    // The definition of SuperSuffix in JLS Chapter 18 is incorrect:
-    // it does not allow NonWildcardTypeArguments. See JLS 15.12.
+// The definition of SuperSuffix in JLS Chapter 18 is incorrect:
+// it does not allow NonWildcardTypeArguments. See JLS 15.12.
 
 BasicType
-    = type:(
-        "byte"
+  = type:(
+    "byte"
       / "short"
       / "char"
       / "int"
@@ -1172,165 +1190,165 @@ BasicType
       / "float"
       / "double"
       / "boolean"
-      ) !LetterOrDigit Spacing
-    { return makePrimitive(type); }
+  ) !LetterOrDigit Spacing
+{ return makePrimitive(type); }
 
 PrimitiveType
-    = BasicType
+  = BasicType
 
 Arguments
-    = LPAR args:(first:Expression rest:(COMMA Expression)* { return buildList(first, rest, 1); })? RPAR
-    { return optionalList(args); }
+  = LPAR args:(first:Expression rest:(COMMA Expression)* { return buildList(first, rest, 1); })? RPAR
+{ return optionalList(args); }
 
 Creator
-    = type:(BasicType / CreatedName) rest:ArrayCreatorRest
-    {
-      return  {
-        node:       'ArrayCreation',
-        type:        buildArrayTree(type, rest.extraDims),
-        initializer: rest.init,
-        dimensions:  rest.dimms
-      };
-    }
-    / args:NonWildcardTypeArguments? type:CreatedName rest:ClassCreatorRest
-    {
-      return mergeProps(rest, {
-        node:          'ClassInstanceCreation',
-        type:           type,
-        typeArguments:  optionalList(args),
-        expression:     null
-      });
-    }
+  = type:(BasicType / CreatedName) rest:ArrayCreatorRest
+{
+  return  {
+    node:       'ArrayCreation',
+    type:        buildArrayTree(type, rest.extraDims),
+    initializer: rest.init,
+    dimensions:  rest.dimms
+  };
+}
+  / args:NonWildcardTypeArguments? type:CreatedName rest:ClassCreatorRest
+{
+  return mergeProps(rest, {
+    node:          'ClassInstanceCreation',
+    type:           type,
+    typeArguments:  optionalList(args),
+    expression:     null
+  });
+}
 
-    // The definition of Creator in JLS Chapter 18 is incorrect:
-    // it does not allow BasicType for array creator. See JLS 15.10.
+// The definition of Creator in JLS Chapter 18 is incorrect:
+// it does not allow BasicType for array creator. See JLS 15.10.
 
 CreatedName
-    = qual:QualifiedIdentifier args:TypeArgumentsOrDiamond? rest:( DOT Identifier TypeArgumentsOrDiamond? )*
-    { return buildTypeName(qual, args, rest); }
+  = qual:QualifiedIdentifier args:TypeArgumentsOrDiamond? rest:( DOT Identifier TypeArgumentsOrDiamond? )*
+  { return buildTypeName(qual, args, rest); }
 
 InnerCreator
-    = id:Identifier args:NonWildcardTypeArgumentsOrDiamond? rest:ClassCreatorRest
-    {
-      return mergeProps(rest, {
-        node: 'ClassInstanceCreation',
-        type:  buildTypeName(id, args, [])
-      });
-    }
+  = id:Identifier args:NonWildcardTypeArgumentsOrDiamond? rest:ClassCreatorRest
+{
+  return mergeProps(rest, {
+    node: 'ClassInstanceCreation',
+    type:  buildTypeName(id, args, [])
+  });
+}
 
 ClassCreatorRest
-    = args:Arguments body:ClassBody?
-    {
-      return {
-        arguments:                 args,
-        anonymousClassDeclaration: body === null ? null : {
-          node:            'AnonymousClassDeclaration',
-          bodyDeclarations: body
-        }
-      };
-    }
+  = args:Arguments body:ClassBody?
+  {
+    return {
+      arguments:                 args,
+      anonymousClassDeclaration: body === null ? null : {
+        node:            'AnonymousClassDeclaration',
+        bodyDeclarations: body
+      }
+    };
+  }
 
 ArrayCreatorRest
-    = dims:Dim+ init:ArrayInitializer
-    { return { extraDims:dims, init:init, dimms: [] }; }
-    / dimexpr:DimExpr+ dims:Dim*
-    { return { extraDims:dimexpr.concat(dims), init:null, dimms: dimexpr }; }
-    / dim:Dim
-    { return { extraDims:[dim], init:null, dimms: [] }; }
+  = dims:Dim+ init:ArrayInitializer
+{ return { extraDims:dims, init:init, dimms: [] }; }
+  / dimexpr:DimExpr+ dims:Dim*
+  { return { extraDims:dimexpr.concat(dims), init:null, dimms: dimexpr }; }
+  / dim:Dim
+{ return { extraDims:[dim], init:null, dimms: [] }; }
 
-    // This version comes from JLS Chapter 18.
-    // It is more generous than JLS 15.10. According to that definition,
-    // BasicType must be followed by at least one DimExpr or by ArrayInitializer.
-    // Besides, the last alternative does not correspond to JLS 15.10,
-    // and may be an error.
+// This version comes from JLS Chapter 18.
+// It is more generous than JLS 15.10. According to that definition,
+// BasicType must be followed by at least one DimExpr or by ArrayInitializer.
+// Besides, the last alternative does not correspond to JLS 15.10,
+// and may be an error.
 
 ArrayInitializer
-    = LWING
-      init:(
-        first:VariableInitializer rest:(COMMA VariableInitializer)*
-        { return buildList(first, rest, 1); }
-      )?
-      COMMA?  RWING
-    { return { node: 'ArrayInitializer', expressions: optionalList(init) }; }
+  = LWING
+init:(
+  first:VariableInitializer rest:(COMMA VariableInitializer)*
+    { return buildList(first, rest, 1); }
+)?
+  COMMA?  RWING
+{ return { node: 'ArrayInitializer', expressions: optionalList(init) }; }
 
 VariableInitializer
-    = ArrayInitializer
-    / Expression
+  = ArrayInitializer
+  / Expression
 
 ParExpression
-    = LPAR expr:Expression RPAR
-    { return { node: 'ParenthesizedExpression', expression: expr }; }
+  = LPAR expr:Expression RPAR
+{ return { node: 'ParenthesizedExpression', expression: expr }; }
 
 QualifiedIdentifier
-    = first:Identifier rest:(DOT Identifier)*
-    { return buildQualified(first, rest, 1); }
+  = first:Identifier rest:(DOT Identifier)*
+  { return buildQualified(first, rest, 1); }
 
 Dim
-    = LBRK RBRK
+  = LBRK RBRK
 
 DimExpr
-    = LBRK exp:Expression RBRK
-    { return exp; }
+  = LBRK exp:Expression RBRK
+{ return exp; }
 
 //-------------------------------------------------------------------------
 //  Types and Modifiers
 //-------------------------------------------------------------------------
 
 Type
-    = type:(BasicType / ClassType) dims:Dim*
-      { return buildArrayTree(type, dims); }
+  = type:(BasicType / ClassType) dims:Dim*
+  { return buildArrayTree(type, dims); }
 
 ReferenceType
-    = bas:BasicType dims:Dim+
-    { return buildArrayTree(bas, dims); }
-    / cls:ClassType dims:Dim*
-    { return buildArrayTree(cls, dims); }
+  = bas:BasicType dims:Dim+
+  { return buildArrayTree(bas, dims); }
+  / cls:ClassType dims:Dim*
+  { return buildArrayTree(cls, dims); }
 
 ClassType
-    = qual:QualifiedIdentifier args:TypeArguments? rest:(DOT Identifier TypeArguments?)*
-    { return buildTypeName(qual, args, rest); }
+  = qual:QualifiedIdentifier args:TypeArguments? rest:(DOT Identifier TypeArguments?)*
+  { return buildTypeName(qual, args, rest); }
 
 ClassTypeList
-    = first:ClassType rest:(COMMA ClassType)*
-    { return buildList(first, rest, 1); }
+  = first:ClassType rest:(COMMA ClassType)*
+  { return buildList(first, rest, 1); }
 
 TypeArguments
-    = LPOINT first:TypeArgument rest:(COMMA TypeArgument)* RPOINT
-    { return buildList(first, rest, 1); }
+  = LPOINT first:TypeArgument rest:(COMMA TypeArgument)* RPOINT
+{ return buildList(first, rest, 1); }
 
 TypeArgument
-    = ReferenceType
-    / QUERY rest:((EXTENDS { return true; } / SUPER { return false; }) ReferenceType)?
-    {
-      return {
-        node:      'WildcardType',
-        upperBound: extractOptional(rest, 0, true),
-        bound:      extractOptional(rest, 1)
-      };
-    }
+  = ReferenceType
+  / QUERY rest:((EXTENDS { return true; } / SUPER { return false; }) ReferenceType)?
+  {
+    return {
+      node:      'WildcardType',
+      upperBound: extractOptional(rest, 0, true),
+      bound:      extractOptional(rest, 1)
+    };
+  }
 
 TypeParameters
-    = LPOINT first:TypeParameter rest:(COMMA TypeParameter)* RPOINT
-    { return buildList(first, rest, 1); }
+  = LPOINT first:TypeParameter rest:(COMMA TypeParameter)* RPOINT
+{ return buildList(first, rest, 1); }
 
 TypeParameter
-    = id:Identifier bounds:(EXTENDS Bound)?
-    {
-      return {
-        node:      'TypeParameter',
-        name:       id,
-        typeBounds: extractOptionalList(bounds, 1)
-      }
+  = id:Identifier bounds:(EXTENDS Bound)?
+  {
+    return {
+      node:      'TypeParameter',
+      name:       id,
+      typeBounds: extractOptionalList(bounds, 1)
     }
+  }
 
 Bound
-    = first:ClassType rest:(AND ClassType)*
-    { return buildList(first, rest, 1); }
+  = first:ClassType rest:(AND ClassType)*
+  { return buildList(first, rest, 1); }
 
 Modifier
-    = Annotation
-    / keyword:(
-        "public"
+  = Annotation
+  / keyword:(
+    "public"
       / "protected"
       / "private"
       / "static"
@@ -1341,122 +1359,122 @@ Modifier
       / "transient"
       / "volatile"
       / "strictfp"
-      ) !LetterOrDigit Spacing
-    { return makeModifier(keyword); }
+  ) !LetterOrDigit Spacing
+{ return makeModifier(keyword); }
 
-    // This common definition of Modifier is part of the modification
-    // in JLS Chapter 18 to minimize look ahead. The main body of JLS has
-    // different lists of modifiers for different language elements.
+// This common definition of Modifier is part of the modification
+// in JLS Chapter 18 to minimize look ahead. The main body of JLS has
+// different lists of modifiers for different language elements.
 
 //-------------------------------------------------------------------------
 //  Annotations
 //-------------------------------------------------------------------------
 
 AnnotationTypeDeclaration
-    = AT INTERFACE id:Identifier body:AnnotationTypeBody
-    {
-      return {
-        node:            'AnnotationTypeDeclaration',
-        name:             id,
-        bodyDeclarations: body
-      };
-    }
+  = AT INTERFACE id:Identifier body:AnnotationTypeBody
+{
+  return {
+    node:            'AnnotationTypeDeclaration',
+    name:             id,
+    bodyDeclarations: body
+  };
+}
 
 AnnotationTypeBody
-    = LWING decl:AnnotationTypeElementDeclaration* RWING
-    { return skipNulls(decl); }
+  = LWING decl:AnnotationTypeElementDeclaration* RWING
+{ return skipNulls(decl); }
 
 AnnotationTypeElementDeclaration
-    = modifiers:Modifier* rest:AnnotationTypeElementRest
-    { return mergeProps(rest, { modifiers: modifiers }); }
-    / SEMI
-    { return null; }
+  = modifiers:Modifier* rest:AnnotationTypeElementRest
+{ return mergeProps(rest, { modifiers: modifiers }); }
+  / SEMI
+{ return null; }
 
 AnnotationTypeElementRest
-    = type:Type rest:AnnotationMethodOrConstantRest SEMI
-    { return mergeProps(rest, { type: type }); }
-    / ClassDeclaration
-    / EnumDeclaration
-    / InterfaceDeclaration
-    / AnnotationTypeDeclaration
+  = type:Type rest:AnnotationMethodOrConstantRest SEMI
+{ return mergeProps(rest, { type: type }); }
+  / ClassDeclaration
+  / EnumDeclaration
+  / InterfaceDeclaration
+  / AnnotationTypeDeclaration
 
 AnnotationMethodOrConstantRest
-    = AnnotationMethodRest
-    / AnnotationConstantRest
+  = AnnotationMethodRest
+  / AnnotationConstantRest
 
 AnnotationMethodRest
-    = id:Identifier LPAR RPAR def:DefaultValue?
-    {
-      return {
-        node:   'AnnotationTypeMemberDeclaration',
-        name:    id,
-        default: def
-      };
-    }
+  = id:Identifier LPAR RPAR def:DefaultValue?
+  {
+    return {
+      node:   'AnnotationTypeMemberDeclaration',
+      name:    id,
+      default: def
+    };
+  }
 
 AnnotationConstantRest
-    = fragments:VariableDeclarators
-    { return { node: 'FieldDeclaration', fragments: fragments }; }
+  = fragments:VariableDeclarators
+{ return { node: 'FieldDeclaration', fragments: fragments }; }
 
 DefaultValue
-    = DEFAULT val:ElementValue
-    { return val; }
+  = DEFAULT val:ElementValue
+{ return val; }
 
 Annotation
-    = NormalAnnotation
-    / SingleElementAnnotation
-    / MarkerAnnotation
+  = NormalAnnotation
+  / SingleElementAnnotation
+  / MarkerAnnotation
 
 NormalAnnotation
-    = AT id:QualifiedIdentifier LPAR pairs:ElementValuePairs? RPAR
-    {
-      return {
-        node:    'NormalAnnotation',
-        typeName: id,
-        values:   optionalList(pairs)
-      };
-    }
+  = AT id:QualifiedIdentifier LPAR pairs:ElementValuePairs? RPAR
+{
+  return {
+    node:    'NormalAnnotation',
+    typeName: id,
+    values:   optionalList(pairs)
+  };
+}
 
 SingleElementAnnotation
-    = AT id:QualifiedIdentifier LPAR value:ElementValue RPAR
-    {
-      return {
-        node:    'SingleMemberAnnotation',
-        typeName: id,
-        value:    value
-      };
-    }
+  = AT id:QualifiedIdentifier LPAR value:ElementValue RPAR
+{
+  return {
+    node:    'SingleMemberAnnotation',
+    typeName: id,
+    value:    value
+  };
+}
 
 MarkerAnnotation
-    = AT id:QualifiedIdentifier
-    { return { node: 'MarkerAnnotation', typeName: id }; }
+  = AT id:QualifiedIdentifier
+{ return { node: 'MarkerAnnotation', typeName: id }; }
 
 ElementValuePairs
-    = first:ElementValuePair rest:(COMMA ElementValuePair)*
-    { return buildList(first, rest, 1); }
+  = first:ElementValuePair rest:(COMMA ElementValuePair)*
+  { return buildList(first, rest, 1); }
 
 ElementValuePair
-    = name:Identifier EQU value:ElementValue
-    {
-      return {
-        node: 'MemberValuePair',
-        name:  name,
-        value: value
-      };
-    }
+  = name:Identifier EQU value:ElementValue
+{
+  return {
+    node: 'MemberValuePair',
+    name:  name,
+    value: value
+  };
+}
 
 ElementValue
-    = ConditionalExpression
-    / Annotation
-    / ElementValueArrayInitializer
+  = ConditionalExpression
+  / Annotation
+  / ElementValueArrayInitializer
 
 ElementValueArrayInitializer
-    = LWING values:ElementValues? COMMA? RWING
-    { return { node: 'ArrayInitializer', expressions: optionalList(values)}; }
+  = LWING values:ElementValues? COMMA? RWING
+{ return { node: 'ArrayInitializer', expressions: optionalList(values)}; }
 
 ElementValues
-    = first:ElementValue rest:(COMMA ElementValue)*
-    { return buildList(first, rest, 1); }
+  = first:ElementValue rest:(COMMA ElementValue)*
+  { return buildList(first, rest, 1); }
 
 
 //=========================================================================
@@ -1479,27 +1497,27 @@ ElementValues
 //-------------------------------------------------------------------------
 
 Spacing
-    = ( [ \t\r\n\u000C]+          // WhiteSpace
+  = ( [ \t\r\n\u000C]+          // WhiteSpace
       / "/*" (!"*/" _)* "*/"      // TraditionalComment
       / "//" (![\r\n] _)* [\r\n]  // EndOfLineComment
-      )* ;
+    )* ;
 
 //-------------------------------------------------------------------------
 //  JLS 3.8  Identifiers
 //-------------------------------------------------------------------------
 
 Identifier
-    = !Keyword first:Letter rest:$LetterOrDigit* Spacing
-    { return { identifier: first + rest, node: 'SimpleName' }; }
+  = !Keyword first:Letter rest:$LetterOrDigit* Spacing
+{ return { identifier: first + rest, node: 'SimpleName' }; }
 
 Letter = [a-z] / [A-Z] / [_$] ;
 
 LetterOrDigit = [a-z] / [A-Z] / [0-9] / [_$] ;
 
-    // These are traditional definitions of letters and digits.
-    // JLS defines letters and digits as Unicode characters recognized
-    // as such by special Java procedures, which is difficult
-    // to express in terms of Parsing Expressions.
+// These are traditional definitions of letters and digits.
+// JLS defines letters and digits as Unicode characters recognized
+// as such by special Java procedures, which is difficult
+// to express in terms of Parsing Expressions.
 
 //-------------------------------------------------------------------------
 //  JLS 3.9  Keywords
@@ -1511,7 +1529,7 @@ LetterOrDigit = [a-z] / [A-Z] / [0-9] / [_$] ;
 
 Keyword
 
-    = ( "abstract"
+  = ( "abstract"
       / "assert"
       / "boolean"
       / "break"
@@ -1564,7 +1582,7 @@ Keyword
       / "void"
       / "volatile"
       / "while"
-      ) !LetterOrDigit
+    ) !LetterOrDigit
 
 ASSERT       = "assert"       !LetterOrDigit Spacing
 BREAK        = "break"        !LetterOrDigit Spacing
@@ -1584,7 +1602,7 @@ IF           = "if"           !LetterOrDigit Spacing
 IMPLEMENTS   = "implements"   !LetterOrDigit Spacing
 IMPORT       = "import"       !LetterOrDigit Spacing
 INTERFACE    = "interface"    !LetterOrDigit Spacing
-INSTANCEOF   = "instanceof"   !LetterOrDigit Spacing
+  INSTANCEOF   = "instanceof"   !LetterOrDigit Spacing
 NEW          = "new"          !LetterOrDigit Spacing
 PACKAGE      = "package"      !LetterOrDigit Spacing
 RETURN       = "return"       !LetterOrDigit Spacing
@@ -1604,72 +1622,72 @@ WHILE        = "while"        !LetterOrDigit Spacing
 //-------------------------------------------------------------------------
 
 Literal
-    = literal:( FloatLiteral
-      / IntegerLiteral          // May be a prefix of FloatLiteral
-      / CharLiteral
-      / StringLiteral
-      / "true"  !LetterOrDigit
-      { return { node: 'BooleanLiteral', booleanValue: true }; }
-      / "false" !LetterOrDigit
-      { return { node: 'BooleanLiteral', booleanValue: false }; }
-      / "null"  !LetterOrDigit
-      { return { node: 'NullLiteral' }; }
-      ) Spacing
-    { return literal; }
+  = literal:( FloatLiteral
+              / IntegerLiteral          // May be a prefix of FloatLiteral
+              / CharLiteral
+              / StringLiteral
+              / "true"  !LetterOrDigit
+              { return { node: 'BooleanLiteral', booleanValue: true }; }
+              / "false" !LetterOrDigit
+              { return { node: 'BooleanLiteral', booleanValue: false }; }
+              / "null"  !LetterOrDigit
+              { return { node: 'NullLiteral' }; }
+            ) Spacing
+{ return literal; }
 
 IntegerLiteral
-    = ( HexNumeral
+  = ( HexNumeral
       / BinaryNumeral
       / OctalNumeral            // May be a prefix of HexNumeral or BinaryNumeral
       / DecimalNumeral          // May be a prefix of OctalNumeral
-      ) [lL]?
-    { return { node: 'NumberLiteral', token: text() }; }
+    ) [lL]?
+  { return { node: 'NumberLiteral', token: text() }; }
 
 DecimalNumeral
-    = "0"
-    / [1-9]([_]*[0-9])*
+  = "0"
+  / [1-9]([_]*[0-9])*
 
 HexNumeral
-    = ("0x" / "0X") HexDigits
+  = ("0x" / "0X") HexDigits
 
 BinaryNumeral
-    = ("0b" / "0B") [01]([_]*[01])*
+  = ("0b" / "0B") [01]([_]*[01])*
 
 OctalNumeral
-    = "0" ([_]*[0-7])+
+  = "0" ([_]*[0-7])+
 
 FloatLiteral
-    = ( HexFloat
-    / DecimalFloat )
-    { return { node: 'NumberLiteral', token: text() }; }
+  = ( HexFloat
+      / DecimalFloat )
+{ return { node: 'NumberLiteral', token: text() }; }
 
 DecimalFloat
-    = Digits "." Digits?  Exponent? [fFdD]?
-    / "." Digits Exponent? [fFdD]?
-    / Digits Exponent [fFdD]?
-    / Digits Exponent? [fFdD]
+  = Digits "." Digits?  Exponent? [fFdD]?
+  / "." Digits Exponent? [fFdD]?
+  / Digits Exponent [fFdD]?
+  / Digits Exponent? [fFdD]
 
 Exponent
-    = [eE] [+\-]? Digits
+  = [eE] [+\-]? Digits
 
 HexFloat
-    = HexSignificand BinaryExponent [fFdD]?
+  = HexSignificand BinaryExponent [fFdD]?
 
 HexSignificand
-    = ("0x" / "0X") HexDigits? "." HexDigits
-    / HexNumeral "."?                           // May be a prefix of above
+  = ("0x" / "0X") HexDigits? "." HexDigits
+  / HexNumeral "."?                           // May be a prefix of above
 
 BinaryExponent
-    = [pP] [+\-]? Digits
+  = [pP] [+\-]? Digits
 
 Digits
-    = [0-9]([_]*[0-9])*
+  = [0-9]([_]*[0-9])*
 
 HexDigits
-    = HexDigit ([_]*HexDigit)*
+  = HexDigit ([_]*HexDigit)*
 
 HexDigit
-    = [a-f] / [A-F] / [0-9]
+  = [a-f] / [A-F] / [0-9]
 
 CharLiteral
     = "'" (Escape / !['\\\n\r] _) "'"                      // this " keeps the editor happy
@@ -1746,7 +1764,4 @@ STAREQU         =   "*="      Spacing
 TILDA           =   "~"       Spacing
 
 EOT = !_
-
-/* http://mousepeg.sourceforge.net/Manual.pdf */
-
 _               =   .

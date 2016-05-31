@@ -8,7 +8,8 @@ const pegjs = require('pegjs');
 // ------------ CONSTANTS
 
 const parser_filename = "./arithmetics.js";
-const parser = require(parser_filename);
+const parser_filename2 = "./myjava.js";
+const parser = require(parser_filename2);
 
 // ------------ PROGRAM
 
@@ -34,5 +35,7 @@ function parseFile (filename) {
 }
 
 function showParsed (obj) {
-    console.log(JSON.stringify(obj, null, 2));
+    console.dir(obj, {depth: null, colors: true});
+    // console.log(JSON.stringify(obj));
+    // console.log(JSON.stringify(obj, null, 4));
 }
