@@ -1,4 +1,27 @@
 {
+  function uniq(a) {
+    var seen = {};
+    return a.filter(function(item) {
+      return seen.hasOwnProperty(item) ? false : (seen[item] = true);
+    });
+  }
+  function extractUseDef(arg, type) {
+    if (!arg) return [];
+
+    type = type || 'uses'
+    var list = [];
+    if (arg instanceof Array) {
+      arg.forEach(function (a) { list = list.concat(extractUseDef(a, type)); });
+    }
+    if (typeof arg === 'object') {
+      if (arg.node && arg[type]) list = list.concat(arg[type]);
+      else if (arg.identifier) list.push(arg.identifier);
+    }
+    else throw new Error("Invalid arg");
+
+    return uniq(list);
+  }
+
   function extractOptional(optional, index, def) {
     def = typeof def !== 'undefined' ?  def : null;
     return optional ? optional[index] : def;
@@ -29,10 +52,20 @@
   }
 
   function buildInfixExpr(first, rest) {
+    function getUsed(left, right) {
+      var uses = [];
+      if (left.node === 'SimpleName') uses.push(left.identifier);
+      else if (left.node !== 'NumberLiteral') uses = uses.concat(left.uses);
+      if (right.node === 'SimpleName') uses.push(right.identifier);
+      else if (right.node !== 'NumberLiteral') uses = uses.concat(right.uses);
+      return uses;
+    }
     return buildTree(first, rest, function(result, element) {
       return {
         node:        'InfixExpression',
         operator:     element[0][0], // remove ending Spacing
+        defs:         [],
+        uses:         getUsed(result, element[1]),
         leftOperand:  result,
         rightOperand: element[1]
       };
@@ -552,22 +585,11 @@ LocalVariableDeclarationStatement
     = modifiers:(FINAL { return makeModifier('final'); } / Annotation)*
       type:Type decls:VariableDeclarators SEMI
     {
-      function a(frags){
-        return frags.map(function (f) {
-          if (f.node) return f.name.identifier;
-        });
-      }
-      function b(frags) {
-        return frags.map(function (f) {
-          if (f.node && f.initializer && f.initializer.node === 'SimpleName')
-            return f.initializer.identifier;
-        });
-      }
       return {
         node:        'VariableDeclarationStatement',
         text:         text(),
-        defs:         a(decls),
-        uses:         b(decls),
+        defs:         extractUseDef(decls, 'defs'),
+        uses:         extractUseDef(decls),
         fragments:    decls,
         modifiers:    modifiers,
         type:         type
@@ -581,11 +603,16 @@ VariableDeclarators
 VariableDeclarator
   = name:Identifier dims:Dim* init:(EQU VariableInitializer)?
   {
+    var initializer = extractOptional(init, 1);
+    var defs = extractUseDef([name, initializer], 'defs');
+    if (initializer && initializer.node === 'SimpleName') defs = [name.identifier];
     return {
 			node:						'VariableDeclarationFragment',
 			name:						 name,
+      defs:            defs,
+      uses:            extractUseDef(initializer),
 			extraDimensions: dims.length,
-			initializer:		 extractOptional(init, 1)
+			initializer:		 initializer
 		};
   }
 
@@ -706,9 +733,9 @@ Statement
 {
   return {
     node:      'WhileStatement',
-    text:       text(),
-    uses:       expr.uses,
-    defs:       expr.defs,
+    text:       "while "+expr.text,
+    uses:       expr.expression.uses,
+    defs:       expr.expression.defs,
     expression: expr.expression,
     body:       body
   };
@@ -845,6 +872,9 @@ StatementExpression
   default:
     return {
       node:      'ExpressionStatement',
+      text:       text(),
+      defs:       expr.defs,
+      uses:       expr.uses,
       expression: expr
     };
   }
@@ -863,6 +893,8 @@ Expression
   return {
     node:         'Assignment',
     operator:      op[0] /* remove ending spaces */,
+    defs:          uniq(extractUseDef([left, right], 'defs').concat(extractUseDef(left, 'uses'))),
+    uses:          extractUseDef([left, right]),
     leftHandSide:  left,
     rightHandSide: right
   };
@@ -934,12 +966,7 @@ RelationalExpression
         node:        'InstanceofExpression',
         leftOperand:  result,
         rightOperand: element[1]
-      } : {
-        node:        'InfixExpression',
-        operator:     element[0][0], // remove ending Spacing
-        leftOperand:  result,
-        rightOperand: element[1]
-      };
+      } : buildInfixExpr(first, rest);
     });
   }
 
@@ -1006,9 +1033,13 @@ CastExpression
 
 Primary
   = ParExpression
-  / args:NonWildcardTypeArguments
-ret:(ExplicitGenericInvocationSuffix / THIS args:Arguments
-     { return { node: 'ConstructorInvocation', arguments: args, typeArguments: [] }; })
+  / args:NonWildcardTypeArguments ret:(ExplicitGenericInvocationSuffix
+                                       / THIS args:Arguments
+                                       { return {
+                                         node: 'ConstructorInvocation',
+                                         arguments: args,
+                                         typeArguments: []
+                                       }; })
 {
   if (ret.typeArguments.length) return TODO(/* Ugly ! */);
   ret.typeArguments = args;
@@ -1277,7 +1308,7 @@ VariableInitializer
 
 ParExpression
   = LPAR expr:Expression RPAR
-{ return { node: 'ParenthesizedExpression', expression: expr }; }
+{ return { node: 'ParenthesizedExpression', defs: expr.defs, uses: expr.uses, text: text(), expression: expr }; }
 
 QualifiedIdentifier
   = first:Identifier rest:(DOT Identifier)*
