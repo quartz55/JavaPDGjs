@@ -9,11 +9,13 @@ const pegjs = require('pegjs');
 
 // ------------ CONSTANTS
 
-const parser_filename = "./myjava.js";
-const parser = require(parser_filename);
-
+const grammar_filename = path.join(__dirname, "./grammars/myjava.pegjs");
 
 // ------------ PROGRAM
+
+function sanitizeText(text) {
+  return text.match(/(.*?)[ \r\n;]*$/)[1];
+}
 
 function parseFile (filename, debug = false) {
   console.log("Parsing file: "+filename);
@@ -22,18 +24,30 @@ function parseFile (filename, debug = false) {
 }
 
 function parseData (data, debug = false) {
-  const parsed_tree = parser.parse(data);
-  showParsed(parsed_tree);
-  const trimmed_tree = trimParsed(parsed_tree);
-  showParsed(trimmed_tree);
-  return trimmed_tree;
+  try {
+    const grammar_source = fs.readFileSync(grammar_filename, 'utf8');
+    const parser = pegjs.buildParser(grammar_source);
+    const parsed_tree = parser.parse(data);
+    const trimmed_tree = trimParsed(parsed_tree);
+
+    if (debug) {
+      showParsed(parsed_tree);
+      showParsed(trimmed_tree);
+    }
+
+    return trimmed_tree;
+  } catch (err) {
+    console.error(err);
+    process.exit(-1);
+  }
 }
 
 function trimObject (obj) {
   var trimmed = {};
   if (obj.node) trimmed.node = obj.node;
   if (obj.name) trimmed.name = obj.name;
-  if (obj.text) trimmed.text = obj.text;
+  if (obj.text) trimmed.statement = sanitizeText(obj.text);
+  if (obj.loop) trimmed.loop = obj.loop;
   if (obj.defs) trimmed.defs = obj.defs;
   if (obj.uses) trimmed.uses = obj.uses;
 
@@ -44,6 +58,28 @@ function trimObject (obj) {
         return trimObject(stmt);
       });
     } else children = [trimObject(obj.body)];
+  }
+  else if (obj.thenStatement) {
+    if (obj.thenStatement.node === 'Block') {
+      children = obj.thenStatement.statements.map(function (stmt) {
+        return trimObject(stmt);
+      });
+    } else children = [trimObject(obj.thenStatement)];
+    if (obj.elseStatement !== null) {
+ var elseObj = {
+        node: "ElseStatement",
+        defs: [],
+        uses: [],
+        statement: "else",
+        children: []
+      };
+      if (obj.elseStatement.node === 'Block') {
+        elseObj.children = obj.elseStatement.statements.map(function (stmt) {
+          return trimObject(stmt);
+        });
+      } else elseObj.children = [trimObject(obj.elseStatement)];
+      children.push(elseObj);
+    }
   }
   trimmed.children = children;
 
@@ -71,23 +107,6 @@ function showParsed (obj) {
   console.dir(obj, {depth: null, colors: true});
 }
 
-
-// ------------ CLI
-
-const args = process.argv.slice(2);
-
-if (args.length === 0) {
-  const stdin = process.stdin;
-  stdin.resume();
-  stdin.setEncoding("utf8");
-
-  let data = "";
-  stdin.on('data', d => data += d);
-  stdin.on('end', () => parseData(data, true));
-}
-else {
-  args.forEach(file => parseFile(file, true));
-}
 
 // ------------ MODULE
 

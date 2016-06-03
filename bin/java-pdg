@@ -1,0 +1,25 @@
+#!/usr/bin/env node
+
+'use strict';
+
+const jpdg = require('../src');
+let program = require('commander');
+
+program
+  .usage('<java file> [options]')
+  .option('-d, --dot', 'Export to DOT format')
+  .option('-i --image', 'Export to image(png) format')
+  .version('0.8.0')
+  .parse(process.argv);
+
+if (!program.args.length) program.help();
+
+let AST = jpdg.buildAST(program.args[0]);
+
+jpdg.grapher.dot(AST).forEach(g => console.log(g));
+
+if (program.dot)
+  jpdg.grapher.grapher(AST, 'dot');
+
+if (program.image)
+  jpdg.grapher.grapher(AST);

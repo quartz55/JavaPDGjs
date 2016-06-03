@@ -5,17 +5,18 @@
       return seen.hasOwnProperty(item) ? false : (seen[item] = true);
     });
   }
-  function extractUseDef(arg, type) {
+  function extractUseDef(arg, type, ids) {
     if (!arg) return [];
 
-    type = type || 'uses'
+    type = type || 'uses';
+    if (ids === undefined) ids = true;
     var list = [];
     if (arg instanceof Array) {
-      arg.forEach(function (a) { list = list.concat(extractUseDef(a, type)); });
+      arg.forEach(function (a) { list = list.concat(extractUseDef(a, type, ids)); });
     }
     if (typeof arg === 'object') {
       if (arg.node && arg[type]) list = list.concat(arg[type]);
-      else if (arg.identifier) list.push(arg.identifier);
+      else if (arg.identifier && ids) list.push(arg.identifier);
     }
     else throw new Error("Invalid arg");
 
@@ -52,20 +53,12 @@
   }
 
   function buildInfixExpr(first, rest) {
-    function getUsed(left, right) {
-      var uses = [];
-      if (left.node === 'SimpleName') uses.push(left.identifier);
-      else if (left.node !== 'NumberLiteral') uses = uses.concat(left.uses);
-      if (right.node === 'SimpleName') uses.push(right.identifier);
-      else if (right.node !== 'NumberLiteral') uses = uses.concat(right.uses);
-      return uses;
-    }
     return buildTree(first, rest, function(result, element) {
       return {
         node:        'InfixExpression',
         operator:     element[0][0], // remove ending Spacing
-        defs:         [],
-        uses:         getUsed(result, element[1]),
+        defs:         extractUseDef([result, element[1]], 'defs', false),
+        uses:         extractUseDef([result, element[1]], 'uses'),
         leftOperand:  result,
         rightOperand: element[1]
       };
@@ -77,6 +70,7 @@
       function(result, element) {
         return {
           node:     'QualifiedName',
+          identifier:  (result.fullname || result.identifier)+"."+element[index].identifier,
           qualifier: result,
           name:      element[index]
         };
@@ -326,8 +320,9 @@ MemberDecl
     {
       return mergeProps({
         node:          'MethodDeclaration',
-        // returnType2:    type,
-        name:           id,
+        returnType2:    type,
+        name:           type.primitiveTypeCode+" "+id.identifier,
+        name2:           id,
         // typeParameters: []
       }, rest);
     }
@@ -344,7 +339,8 @@ MemberDecl
       return mergeProps({
         node:       'MethodDeclaration',
         // returnType2: makePrimitive('void'),
-        name:        id,
+        name:           "void " + id.identifier,
+        name2:           id,
         constructor: false
       }, rest);
     }
@@ -705,9 +701,12 @@ Statement
   {
     return {
       node:         'IfStatement',
-      elseStatement: extractOptional(alt, 1),
-      thenStatement: then,
+      text:          "if "+expr.text,
+      defs:          expr.expression.defs || [],
+      uses:          extractUseDef(expr.expression, 'uses'),
       expression:    expr.expression,
+      thenStatement: then,
+      elseStatement: extractOptional(alt, 1),
     };
   }
   / FOR LPAR init:ForInit? SEMI expr:Expression? SEMI up:ForUpdate? RPAR body:Statement
@@ -734,8 +733,9 @@ Statement
   return {
     node:      'WhileStatement',
     text:       "while "+expr.text,
-    uses:       expr.expression.uses,
-    defs:       expr.expression.defs,
+    defs:       expr.expression.defs || [],
+    uses:       extractUseDef(expr.expression, 'uses'),
+    loop:       true,
     expression: expr.expression,
     body:       body
   };
@@ -771,8 +771,16 @@ rest:(cat:Catch+ fin:Finally? { return makeCatchFinally(cat, fin); }
 { return { node: 'SwitchStatement', statements: cases, expression: expr.expression }; }
   / SYNCHRONIZED expr:ParExpression body:Block
 { return { node: 'SynchronizedStatement', expression: expr.expression, body: body } }
+
   / RETURN expr:Expression? SEMI
-{ return { node: 'ReturnStatement', expression: expr } }
+{ return {
+  node:       'ReturnStatement',
+  text:       text(),
+  uses:       [],
+  defs:       extractUseDef(expr, 'defs'),
+  expression: expr
+} }
+
   / THROW expr:Expression SEMI
 { return { node: 'ThrowStatement', expression: expr }; }
   / BREAK id:Identifier? SEMI
@@ -894,7 +902,7 @@ Expression
     node:         'Assignment',
     operator:      op[0] /* remove ending spaces */,
     defs:          uniq(extractUseDef([left, right], 'defs').concat(extractUseDef(left, 'uses'))),
-    uses:          extractUseDef([left, right]),
+    uses:          extractUseDef(right),
     leftHandSide:  left,
     rightHandSide: right
   };
@@ -1000,31 +1008,31 @@ UnaryExpression
 
 UnaryExpressionNotPlusMinus
   = expr:CastExpression
-{
-  return {
-    node:      'CastExpression',
-    type:       expr[1],
-    expression: expr[3]
-  };
-}
+  { return {
+      node:      'CastExpression',
+      type:       expr[1],
+      expression: expr[3]
+    };}
+
   / arg:Primary sel:Selector sels:Selector* operator:PostfixOp+
-  {
-    return operator.length > 1 ? TODO(/* JLS7? */) : {
-      node:    'PostfixExpression',
-      operator: operator[0],
-      operand:  buildSelectorTree(arg, sel, sels)
-    };
-  }
+  { return operator.length > 1 ? TODO(/* JLS7? */) : {
+    node:    'PostfixExpression',
+    operator: operator[0],
+    operand:  buildSelectorTree(arg, sel, sels)
+  };}
+
   / arg:Primary sel:Selector sels:Selector*
   { return buildSelectorTree(arg, sel, sels); }
+
   / arg:Primary operator:PostfixOp+
-  {
-    return operator.length > 1 ? TODO(/* JLS7? */) : {
-      node:    'PostfixExpression',
-      operator: operator[0],
-      operand:  arg
-    };
-  }
+  { return operator.length > 1 ? TODO(/* JLS7? */) : {
+    node:    'PostfixExpression',
+    defs:     arg.uses || [arg.identifier],
+    uses:     arg.uses || [arg.identifier],
+    operator: operator[0],
+    operand:  arg
+  };}
+
   / Primary
 
 CastExpression
@@ -1040,11 +1048,12 @@ Primary
                                          arguments: args,
                                          typeArguments: []
                                        }; })
-{
-  if (ret.typeArguments.length) return TODO(/* Ugly ! */);
-  ret.typeArguments = args;
-  return ret;
-}
+  {
+    if (ret.typeArguments.length) return TODO(/* Ugly ! */);
+    ret.typeArguments = args;
+    return ret;
+  }
+
   / THIS args:Arguments?
   {
     return args === null ? {

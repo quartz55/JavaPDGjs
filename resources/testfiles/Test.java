@@ -1,17 +1,29 @@
 public class Test {
-    public void testFunc1() {
-        int sum,sum2,sum3 = a;
-        int i = 1;
-        int a = sum;
-        int a = b + 1 = 0;
-        int b = 20 + sum - a * (a+i);
-        while (i < 11 < (a + sum) < b) {
-            sum = sum + i;
-            i = i + 1;
+    public void sum() {
+        int i,sum;
+        sum = 0;
+        i = 1;
+        while (i < 11) {
+            sum = sum+i;
+            i = i+1;
         }
-        while (true)
-            a++;
-        System.out.println(sum);
-        System.out.println(i);
+    }
+
+    public int sum2() {
+        int i,sum;
+        sum = 0;
+        i = 10;
+
+        if (i >= 15) {
+            sum += 15;
+        }
+        else if (i >= 10) {
+            sum += 10;
+        }
+        else {
+            return sum;
+        }
+    }
+    private void sum3() {
     }
 }
