@@ -49,17 +49,16 @@ class ASTClass {
   }
 
   createClassPDG(multiple = false) {
-    const graphNode = (graph, root, node) => {
-      let g_node = graph.addNode(this.graphIDCounter++, {label: node.name || node.statement});
-      graph.addEdge(root, g_node);
-      if (node.loop) graph.addEdge(g_node, g_node);
-      if (node.node === "VariableDeclarationStatement") {
+    const checkNode = (graph, node, g_node) => {
+      if (node.node === "VariableDeclarationStatement" || node.node === 'VariableDeclarationExpression' || node.node === 'CatchClause') {
         node.defs.forEach(def => {
           let lookup = this.symbolTable.lookup(def);
           if (lookup && lookup.scope === lookup.currScope) {
             throw new Error("Variable already declared: " + def);
           }
-          else this.symbolTable.insert(def, g_node);
+          else{
+            this.symbolTable.insert(def, g_node);
+          }
         });
         node.uses.forEach(use => {
           let lookup = this.symbolTable.lookup(use);
@@ -76,7 +75,7 @@ class ASTClass {
             this.symbolTable.insert(def, g_node);
             graph.addEdge(lookup.values, g_node, {color: "red"});
           }
-          else throw new Error("Variable not declared: " + def);
+          else throw new Error("Variable not declared: " + def + JSON.stringify(node));
         });
         node.uses.forEach(use => {
           let lookup = this.symbolTable.lookup(use);
@@ -86,17 +85,41 @@ class ASTClass {
           else throw new Error("Variable not declared: " + use);
         });
       }
+    };
+
+    const graphNode = (graph, root, node) => {
+      let g_node = graph.addNode(this.graphIDCounter++, {label: node.name || node.statement});
+      graph.addEdge(root, g_node);
+      if (node.loop) graph.addEdge(g_node, g_node);
+
+      if (node.node === 'ForStatement') {
+        this.symbolTable.enter();
+        node.stmt.forEach(st => checkNode(graph, st, g_node));
+      }
+      else if (node.node === 'CatchClause') {
+        this.symbolTable.enter();
+        checkNode(graph, node, g_node);
+      }
+      else {
+        checkNode(graph, node, g_node);
+      }
       if (node.node === "ReturnStatement")
         setNodeAttrs(g_node, {fontcolor: "black", fillcolor: "grey", style: "filled", shape: "hexagon"});
 
       try {
         if (node.children.length) {
           setNodeAttrs(g_node, {ordering: "out"});
-          if (node.node === "ElseStatement") this.symbolTable.exit();
-          this.symbolTable.enter();
+          if (node.node === "ElseStatement") {
+            this.symbolTable.exit();
+            this.symbolTable.enter();
+          }
+          if (node.node !== 'ForStatement' && node.node !== 'CatchClause') this.symbolTable.enter();
           node.children.forEach(child => {
             graphNode(graph, g_node, child);
           });
+          this.symbolTable.exit();
+        }
+        else if (node.node === 'ForStatement' || node.node === 'CatchClause') {
           this.symbolTable.exit();
         }
       } catch (err) {

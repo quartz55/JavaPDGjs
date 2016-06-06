@@ -655,6 +655,8 @@ VariableDeclaratorId
   {
     return {
       node:           'SingleVariableDeclaration',
+      defs:            [id.identifier],
+      uses:            [],
       name:            id,
       extraDimensions: dims.length
     };
@@ -711,11 +713,19 @@ Statement
   }
   / FOR LPAR init:ForInit? SEMI expr:Expression? SEMI up:ForUpdate? RPAR body:Statement
 {
+  var initializers = optionalList(init);
+  var updaters = optionalList(up);
+  var stmt = [].concat(initializers, expr, updaters);
   return {
     node:        'ForStatement',
-    initializers: optionalList(init),
+    defs:         extractUseDef(stmt, 'defs'),
+    uses:         extractUseDef(stmt, 'uses'),
+    text:         text(),
+    stmt:         stmt,
+    initializers: initializers,
+    loop:         true,
     expression:   expr,
-    updaters:     optionalList(up),
+    updaters:     updaters,
     body:         body
   };
 }
@@ -751,21 +761,27 @@ Statement
   / TRY LPAR first:Resource rest:(SEMI Resource)* SEMI? RPAR
 body:Block cat:Catch* fin:Finally?
   {
-    return mergeProps(makeCatchFinally(cat, fin), {
+    return mergeProps({
       node:        'TryStatement',
+      text:         "try",
+      defs:         [],
+      uses:         [],
       body:         body,
       resources:    buildList(first, rest, 1)
-    });
+    }, makeCatchFinally(cat, fin));
   }
   / TRY body:Block
 rest:(cat:Catch+ fin:Finally? { return makeCatchFinally(cat, fin); }
       / fin:Finally { return makeCatchFinally([], fin); })
 {
-  return mergeProps(rest, {
+  return mergeProps({
     node:        'TryStatement',
+    text:         "try",
+    defs:         [],
+    uses:         [],
     body:         body,
     resources:    []
-  });
+  }, rest);
 }
   / SWITCH expr:ParExpression LWING cases:SwitchBlockStatementGroups RWING
 { return { node: 'SwitchStatement', statements: cases, expression: expr.expression }; }
@@ -776,8 +792,8 @@ rest:(cat:Catch+ fin:Finally? { return makeCatchFinally(cat, fin); }
 { return {
   node:       'ReturnStatement',
   text:       text(),
-  uses:       [],
-  defs:       extractUseDef(expr, 'defs'),
+  defs:       extractUseDef(expr, 'defs', false),
+  uses:       extractUseDef(expr, 'uses'),
   expression: expr
 } }
 
@@ -801,6 +817,7 @@ Resource
   fragment.node = 'VariableDeclarationFragment';
   return {
     node:     'VariableDeclarationExpression',
+    text:      text(),
     modifiers: modifiers,
     type:      type,
     fragments: [fragment]
@@ -813,6 +830,9 @@ Catch
 {
   return {
     node:       'CatchClause',
+    text:        text(),
+    defs:        extractUseDef(decl, 'defs'),
+    uses:        extractUseDef(decl, 'uses'),
     body:        body,
     exception:   mergeProps(decl, {
       modifiers:   modifiers,
@@ -851,6 +871,9 @@ ForInit
 {
   return [{
     node:     'VariableDeclarationExpression',
+    text:      text(),
+    defs:      extractUseDef(decls, 'defs'),
+    uses:      extractUseDef(decls, 'uses'),
     modifiers: modifiers,
     fragments: decls,
     type:      type
@@ -876,13 +899,13 @@ StatementExpression
   switch(expr.node) {
   case 'SuperConstructorInvocation':
   case 'ConstructorInvocation':
-    return expr;
+    return mergeProps(expr, {uses:[], defs:[]});
   default:
     return {
       node:      'ExpressionStatement',
       text:       text(),
-      defs:       expr.defs,
-      uses:       expr.uses,
+      defs:       extractUseDef(expr, 'defs'),
+      uses:       extractUseDef(expr, 'uses'),
       expression: expr
     };
   }
@@ -1000,6 +1023,8 @@ UnaryExpression
     ? { node: 'NumberLiteral', token: text() }
   : {
     node:    'PrefixExpression',
+    defs:     extractUseDef(operand, 'defs', false),
+    uses:     extractUseDef(operand, 'uses'),
     operator: operator,
     operand:  operand
   };
@@ -1103,11 +1128,13 @@ QualifiedIdentifierSuffix
 { return { node: 'ArrayAccess', array: qual, index: expr }; }
   / qual:QualifiedIdentifier args:Arguments
 {
-  return mergeProps(popQualified(qual), {
+  return mergeProps({
     node:         'MethodInvocation',
+    defs:          [],
+    uses:          extractUseDef(args, 'uses'),
     arguments:     args,
     typeArguments: []
-  });
+  }, popQualified(qual));
 }
   / qual:QualifiedIdentifier DOT CLASS
 { return { node: 'TypeLiteral', type: buildTypeName(qual, null, []) }; }

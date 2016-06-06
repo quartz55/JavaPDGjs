@@ -2,7 +2,9 @@
   "name": "java-pdg",
   "version": "1.0.0",
   "description": "",
-  "bin": "bin/java-pdg",
+  "bin": {
+    "java-pdg": "bin/java-pdg"
+  },
   "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

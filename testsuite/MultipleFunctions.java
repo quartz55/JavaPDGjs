@@ -1,4 +1,4 @@
-public class Test {
+public class MultipleFunctions {
     public void sum() {
         int i,sum;
         sum = 0;
@@ -24,6 +24,17 @@ public class Test {
             return sum;
         }
     }
-    private void sum3() {
+
+    public int sum3() {
+        int sum = 0;
+
+        for (int i = 0; i < 10; ++i) {
+            sum += 10;
+        }
+
+        return sum;
+    }
+
+    private void sum4() {
     }
 }

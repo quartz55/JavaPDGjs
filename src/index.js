@@ -3,8 +3,8 @@
 const parser = require('./parser.js');
 const grapher = require('./grapher.js');
 
-function buildAST (javaFile) {
-  return parser.parseFile(javaFile);
+function buildAST (javaFile, debug = false) {
+  return parser.parseFile(javaFile, debug);
 }
 
 function getDOT (javaFile) {

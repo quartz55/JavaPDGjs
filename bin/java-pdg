@@ -14,7 +14,7 @@ program
 
 if (!program.args.length) program.help();
 
-let AST = jpdg.buildAST(program.args[0]);
+let AST = jpdg.buildAST(program.args[0], true);
 
 jpdg.grapher.dot(AST).forEach(g => console.log(g));
 

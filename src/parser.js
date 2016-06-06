@@ -14,7 +14,7 @@ const grammar_filename = path.join(__dirname, "./grammars/myjava.pegjs");
 // ------------ PROGRAM
 
 function sanitizeText(text) {
-  return text.match(/(.*?)[ \r\n;]*$/)[1];
+  return text.match(/.+?(?=$|\{|\n|\r)/)[0].replace(/"/g, '\\"');
 }
 
 function parseFile (filename, debug = false) {
@@ -50,6 +50,7 @@ function trimObject (obj) {
   if (obj.loop) trimmed.loop = obj.loop;
   if (obj.defs) trimmed.defs = obj.defs;
   if (obj.uses) trimmed.uses = obj.uses;
+  if (obj.stmt) trimmed.stmt = obj.stmt;
 
   var children = [];
   if (obj.body) {
@@ -66,7 +67,7 @@ function trimObject (obj) {
       });
     } else children = [trimObject(obj.thenStatement)];
     if (obj.elseStatement !== null) {
- var elseObj = {
+      var elseObj = {
         node: "ElseStatement",
         defs: [],
         uses: [],
@@ -81,6 +82,11 @@ function trimObject (obj) {
       children.push(elseObj);
     }
   }
+
+  if (obj.catchClauses) {
+    children = children.concat(obj.catchClauses.map(function (clause) { return trimObject(clause); }));
+  }
+
   trimmed.children = children;
 
   return trimmed;
